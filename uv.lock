@@ -1760,6 +1760,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "google-adk" },
     { name = "pypdf" },
+    { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn" },
 ]
@@ -1769,6 +1770,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.136.1" },
     { name = "google-adk", specifier = ">=1.32.0" },
     { name = "pypdf", specifier = ">=6.10.2" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "requests", specifier = ">=2.33.1" },
     { name = "uvicorn", specifier = ">=0.46.0" },
 ]
