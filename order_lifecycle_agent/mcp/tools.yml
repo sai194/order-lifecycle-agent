@@ -1,0 +1,35 @@
+sources:
+  order-postgres-source:
+    kind: postgres
+    host: 127.0.0.1
+    port: 5432
+    database: order_lifecycle
+    user: order_user
+    password: order_password
+
+tools:
+  get_order_lifecycle_from_postgres:
+    kind: postgres-sql
+    source: order-postgres-source
+    description: Get order and return lifecycle details for a retail order.
+    parameters:
+      - name: order_id
+        type: string
+        description: Retail order ID
+    statement: |
+      SELECT
+        o.order_id,
+        o.order_status,
+        o.order_date,
+        o.delivery_date,
+        r.return_status,
+        r.refund_status,
+        r.return_date
+      FROM orders o
+      LEFT JOIN returns r
+        ON o.order_id = r.order_id
+      WHERE o.order_id = $1;
+
+toolsets:
+  order_lifecycle_toolset:
+    - get_order_lifecycle_from_postgres
