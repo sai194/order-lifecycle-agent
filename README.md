@@ -1,17 +1,17 @@
-# 1. Init DB
+# 1. Init DB -- Sqllite 
 uv run python scripts/init_db.py
 
 # 2. Start payment API
 uv run uvicorn api.payment_api:app --reload --port 8000
 # Build policy index
 uv run python scripts/build_policy_index.py
-Creates data/policy_vector_index.pkl
-# Postgres & MCP setup
+Creates data/chroma_db/
+# Postgres, Init DB, MCP setup
 docker compose down
 docker compose pull
 docker compose up -d
 ./toolbox --tools-file <pwd>/mcp/tools.yaml --port 5000
---./toolbox --tools-file /Users/saiyeluri/Documents/Apps/order-lifecycle-agent/mcp/tools.yml --port 5000
+<!-- ./toolbox --tools-file /Users/saiyeluri/Documents/Apps/order-lifecycle-agent/mcp/tools.yml --port 5000 -->
 If init.sql changed, then 
 docker compose down -v
 docker compose up -d
