@@ -1,16 +1,18 @@
-import os
-import pickle
-import re
 from pathlib import Path
+import re
 
+import chromadb
 from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
 
 PDF_PATH = Path("data/refund_policy.pdf")
-INDEX_PATH = Path("data/policy_vector_index.pkl")
+CHROMA_PATH = "data/chroma_db"
+COLLECTION_NAME = "refund_policy"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 
-def extract_pdf_text(pdf_path: Path) -> str:
-    reader = PdfReader(str(pdf_path))
+def extract_pdf_text():
+    reader = PdfReader(str(PDF_PATH))
     text = ""
 
     for page in reader.pages:
@@ -19,9 +21,8 @@ def extract_pdf_text(pdf_path: Path) -> str:
     return text
 
 
-def chunk_text(text: str, max_chars: int = 500) -> list[str]:
+def chunk_text(text: str, max_chars: int = 500):
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-
     chunks = []
 
     for paragraph in paragraphs:
@@ -29,49 +30,40 @@ def chunk_text(text: str, max_chars: int = 500) -> list[str]:
             chunks.append(paragraph)
         else:
             for i in range(0, len(paragraph), max_chars):
-                chunks.append(paragraph[i : i + max_chars])
+                chunks.append(paragraph[i:i + max_chars])
 
     return chunks
 
 
-def simple_embedding(text: str) -> set[str]:
-    """
-    Simple local embedding substitute for Blog 2.
-    This creates keyword-token vectors.
-    Blog 3 can replace this with Gemini / Vertex AI embeddings.
-    """
-    tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
-    return set(tokens)
-
-
 def build_index():
-    if not PDF_PATH.exists():
-        raise FileNotFoundError(f"PDF not found: {PDF_PATH}")
-
-    text = extract_pdf_text(PDF_PATH)
+    text = extract_pdf_text()
     chunks = chunk_text(text)
 
-    if not chunks:
-        raise ValueError("No text chunks extracted from PDF.")
+    model = SentenceTransformer(MODEL_NAME)
+    embeddings = model.encode(chunks, normalize_embeddings=True).tolist()
 
-    index = []
+    client = chromadb.PersistentClient(path=CHROMA_PATH)
 
-    for idx, chunk in enumerate(chunks):
-        index.append(
+    existing = [c.name for c in client.list_collections()]
+    if COLLECTION_NAME in existing:
+        client.delete_collection(COLLECTION_NAME)
+
+    collection = client.create_collection(name=COLLECTION_NAME)
+
+    collection.add(
+        ids=[f"refund_policy_chunk_{i}" for i in range(len(chunks))],
+        documents=chunks,
+        embeddings=embeddings,
+        metadatas=[
             {
-                "id": f"policy_chunk_{idx}",
-                "text": chunk,
-                "tokens": simple_embedding(chunk),
+                "source": "refund_policy.pdf",
+                "chunk_index": i,
             }
-        )
+            for i in range(len(chunks))
+        ],
+    )
 
-    os.makedirs(INDEX_PATH.parent, exist_ok=True)
-
-    with open(INDEX_PATH, "wb") as f:
-        pickle.dump(index, f)
-
-    print(f"Built policy index with {len(index)} chunks")
-    print(f"Saved index to {INDEX_PATH}")
+    print(f"Stored {len(chunks)} chunks in ChromaDB at {CHROMA_PATH}")
 
 
 if __name__ == "__main__":

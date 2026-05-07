@@ -1,54 +1,41 @@
-import pickle
-import re
-from pathlib import Path
+import chromadb
+from sentence_transformers import SentenceTransformer
 
-INDEX_PATH = Path("data/policy_vector_index.pkl")
-
-
-def simple_embedding(text: str) -> set[str]:
-    tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
-    return set(tokens)
-
-
-def score(query_tokens: set[str], chunk_tokens: set[str]) -> float:
-    if not query_tokens or not chunk_tokens:
-        return 0.0
-
-    overlap = query_tokens.intersection(chunk_tokens)
-    return len(overlap) / len(query_tokens)
+CHROMA_PATH = "data/chroma_db"
+COLLECTION_NAME = "refund_policy"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 def search_refund_policy(query: str):
     """
-    Search persisted refund policy chunks.
-    Use this before reading the full PDF.
+    Search refund policy from persisted ChromaDB vector database.
+    Use this tool before reading the full PDF.
     """
 
-    if not INDEX_PATH.exists():
-        return {
-            "error": "POLICY_INDEX_NOT_FOUND",
-            "message": "Run: uv run python scripts/build_policy_index.py",
-        }
+    client = chromadb.PersistentClient(path=CHROMA_PATH)
+    collection = client.get_collection(name=COLLECTION_NAME)
 
-    with open(INDEX_PATH, "rb") as f:
-        index = pickle.load(f)
+    model = SentenceTransformer(MODEL_NAME)
+    query_embedding = model.encode([query], normalize_embeddings=True).tolist()[0]
 
-    query_tokens = simple_embedding(query)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3,
+    )
 
-    ranked = []
+    matches = []
 
-    for item in index:
-        ranked.append(
+    for i in range(len(results["documents"][0])):
+        matches.append(
             {
-                "id": item["id"],
-                "text": item["text"],
-                "score": score(query_tokens, item["tokens"]),
+                "chunk_id": results["ids"][0][i],
+                "text": results["documents"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "distance": results["distances"][0][i],
             }
         )
 
-    ranked = sorted(ranked, key=lambda x: x["score"], reverse=True)
-
     return {
         "query": query,
-        "matches": ranked[:3],
+        "matches": matches,
     }
